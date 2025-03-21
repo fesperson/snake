@@ -3,20 +3,24 @@ import random
 import numpy as np
 from collections import deque
 from game import SnakeGameAI, Direction, Point
+from model import Linear_QNet, QTrainer
+from helper import plot
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
-LR = 0.001
+LR = 0.005
 BOUND_SIZE = 20
 
 class Agent:
     def __init__(self):
         self.n_games = 0
         self.epsilon = 0 # randomness control
-        self.gamma = 0 # discount rate 
+        self.gamma = 0.9 # discount rate (must be smaller than 1)
         self.memory = deque(maxlen = MAX_MEMORY) # automaticlaly removes element from left if we exceed memory
-        self.model = None #TODO
-        self.trainer = None #TODO
+        self.model = Linear_QNet(15,256,3)
+
+        # self.model.load_state_dict(torch.load("model/best_sofar.pth"))
+        self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
 
 
     def get_state(self, game):
@@ -52,7 +56,8 @@ class Agent:
             (dir_r and game.is_collision(point_u)) or
             (dir_l and game.is_collision(point_d)),
 
-            dir_l,
+            # Direction
+            dir_l, 
             dir_r,
             dir_u,
             dir_d,
@@ -61,6 +66,11 @@ class Agent:
             game.food.x > game.head.x,  # food right
             game.food.y < game.head.y,  # food up
             game.food.y > game.head.y,  # food down
+
+            game.snake[-1].x < game.head.x, # tail left
+            game.snake[-1].x > game.head.x, # tail right
+            game.snake[-1].y < game.head.y, # tail up
+            game.snake[-1].y > game.head.y # tail down
         ]
 
         return np.array(state, dtype=int)
@@ -72,7 +82,7 @@ class Agent:
 
     # trains on game?
     def train_long_memory(self):
-        if len(self.memory > BATCH_SIZE):
+        if len(self.memory) > BATCH_SIZE:
             mini_sample = random.sample(self.memory, BATCH_SIZE) # list of tuples
         else:
             mini_sample = self.memory # take all of memory
@@ -88,14 +98,14 @@ class Agent:
         # to begin we do random moves 
         # this is a tradeoff between exploration and exploitation
         # the more games, the less we make random moves
-        self.epsilon = 80 - self.n_games
+        self.epsilon = max([2,100 - self.n_games])
         final_move = [0,0,0]
-        if random.randin(0, 200) < self.epsilon:
+        if random.randint(0, 200) < self.epsilon:
             move = random.randint(0,2)
             final_move[move] = 1
         else:
             state0 = torch.tensor(state, dtype=torch.float)
-            prediction = self.model.predict(state0)
+            prediction = self.model(state0)
             move = torch.argmax(prediction).item()
             final_move[move] = 1
         return final_move
@@ -115,7 +125,7 @@ def train():
         final_move = agent.get_action(state_old)
 
         # perform move and get new state
-        reward, game_over, score = game.play_step(final_move)
+        game_over, reward, score = game.play_step(final_move)
         state_new = agent.get_state(game)
 
         # train short memory of the agent (for one step)
@@ -132,11 +142,15 @@ def train():
 
             if score > record:
                 record = score
-                # TODO agent.model.save()
+                agent.model.save()
 
             print('Game', agent.n_games, 'Score', score, 'Record', record)
 
-        # TODO: plot 
+            plot_scores.append(score)
+            total_score += score
+            mean_score = total_score / agent.n_games
+            plot_mean_scores.append(mean_score)
+            plot(plot_scores, plot_mean_scores)
 
 
 if __name__ == '__main__':

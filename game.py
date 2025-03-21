@@ -3,6 +3,7 @@ import random
 from enum import Enum
 from collections import namedtuple
 import numpy as np
+import math
 
 class Direction(Enum):
     RIGHT = 1
@@ -13,7 +14,7 @@ class Direction(Enum):
 Point = namedtuple('Point', 'x, y')
 
 BLOCK_SIZE = 20
-SPEED = 20
+SPEED = 10000
 BLACK = (0,0,0)
 WHITE = (255,255,255)
 RED = (200,0,0)
@@ -92,20 +93,27 @@ class SnakeGameAI:
         # 3. Check if game over
         reward = 0
         game_over = False
-        if self.is_collision() or self.frame_iteration > 100*len(self.snake):
+        if self.is_collision() or self.frame_iteration > 20*len(self.snake):
             # if there is a collision, or the snake takes ages to do anything
             game_over=True
-            reward = -10
+            reward = -20
             return game_over, self.score, self.score
+        
+
 
         # 4. place new food or just move snake
+
         if self.head == self.food:
             self.score += 1
-            reward += 10
+            reward += 20
             self._place_food()
         else:
+            # dist_to_food = math.sqrt((self.head.x - self.food.x)**2 + (self.head.y - self.food.y)**2)
+            # reward = 1 / dist_to_food
             self.snake.pop()
         
+
+        print(reward)
         # 5. update ui and clock
         self._update_ui()
         self.clock.tick(SPEED)
@@ -115,6 +123,7 @@ class SnakeGameAI:
         return game_over, reward, self.score
     
     def _update_ui(self):
+        return
         self.display.fill(BLACK)
         for pt in self.snake:
             pygame.draw.rect(self.display, BLUE1, pygame.Rect(pt.x, pt.y, BLOCK_SIZE, BLOCK_SIZE))
@@ -160,10 +169,10 @@ class SnakeGameAI:
 
         # hits boundary
         if (pt.x > self.w - BLOCK_SIZE) or (pt.x < 0) or (pt.y > self.h - BLOCK_SIZE) or (pt.y < 0):
-            print("boundary collision")
+            
             return True
         if pt in self.snake[1:]:
-            print("self collision")
+            
             return True
         return False
 
